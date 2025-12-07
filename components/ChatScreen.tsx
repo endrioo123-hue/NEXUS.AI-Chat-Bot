@@ -11,13 +11,6 @@ declare global {
   }
 }
 
-// Interface for experimental speech config options
-interface ExtendedSpeechConfig {
-  voiceConfig?: { prebuiltVoiceConfig?: { voiceName: string } };
-  audioEncoding?: string;
-  sampleRateHertz?: number;
-}
-
 interface ChatScreenProps {
   character: Character;
   onBack: () => void;
@@ -76,16 +69,24 @@ const createImpulseResponse = (ctx: AudioContext, duration: number, decay: numbe
     return impulse;
 };
 
-// Helper: Soft Clipper / Saturation Curve for Harmonic Exciter
-const makeDistortionCurve = (amount: number) => {
+// Helper: Analog Tube Saturation Curve (Asymmetric for Even Harmonics/Warmth)
+const makeTubeCurve = (amount: number) => {
   const k = typeof amount === 'number' ? amount : 50;
   const n_samples = 44100;
   const curve = new Float32Array(n_samples);
-  const deg = Math.PI / 180;
+  
   for (let i = 0; i < n_samples; ++i) {
     const x = (i * 2) / n_samples - 1;
-    // Classic soft-clipping sigmoid
-    curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+    // Asymmetric transfer function to simulate triode tube characteristics
+    if (x < -0.5) {
+        curve[i] = -0.5 + (1 + x + 0.5) * 0.1; // Soft bottom compression
+    } else if (x > 0.5) {
+        curve[i] = 0.5 + (x - 0.5) * 0.8; // Harder top limit
+    } else {
+        curve[i] = x; // Linear middle
+    }
+    // Apply drive
+    curve[i] *= (1 + k/100);
   }
   return curve;
 };
@@ -209,6 +210,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [isFlashMode, setIsFlashMode] = useState(false);
+  const [speechSpeed, setSpeechSpeed] = useState(1.0);
   const [detectedEmotion, setDetectedEmotion] = useState<string>('NEUTRAL');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -236,7 +238,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
         isMountedRef.current = false;
         if (ttsTimeoutRef.current) clearTimeout(ttsTimeoutRef.current);
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close();
+            try { audioContextRef.current.close(); } catch(e) {}
         }
     };
   }, [character.id]);
@@ -319,8 +321,24 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
     setIsPlayingAudio(true);
     let nextStartTime = 0;
     
+    // Reference Counting for Robust Stream Cleanup
+    let activeSourcesCount = 0;
+    let streamFinished = false;
+
     // Clear any pending cleanup timeouts
     if (ttsTimeoutRef.current) clearTimeout(ttsTimeoutRef.current);
+
+    // Function to check if we can close the context
+    const checkCleanup = () => {
+        if (!isMountedRef.current) return;
+        // Only cleanup if stream is done AND all audio sources have finished playing
+        if (streamFinished && activeSourcesCount === 0) {
+            // Wait for 1s to allow Reverb tail to fade out naturally
+            ttsTimeoutRef.current = window.setTimeout(() => {
+                handleTTSCleanup();
+            }, 1000);
+        }
+    };
 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -386,18 +404,18 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
         highShelf.frequency.value = 8000;
         highShelf.gain.value = emotion.trebleBoost;
 
-        // 5. Formant Morphing (Timbre Simulation) - EXPERIMENTAL
+        // 5. Formant Morphing (Timbre Simulation)
         const formantFilter = ctx.createBiquadFilter();
         formantFilter.type = 'peaking';
         formantFilter.frequency.value = 1000 + timbreShift; // Shift center freq
         formantFilter.Q.value = 1.0;
-        formantFilter.gain.value = Math.abs(timbreShift) > 50 ? 5 : 0; // Only activate if significant shift
+        formantFilter.gain.value = Math.abs(timbreShift) > 50 ? 5 : 0; 
 
-        // 6. Harmonic Exciter (Saturation)
+        // 6. Tube Harmonics (Warm Saturation)
         const exciterGain = ctx.createGain();
         exciterGain.gain.value = 0.05 + (emotion.saturation / 500); // Dynamic blend
         const shaper = ctx.createWaveShaper();
-        shaper.curve = makeDistortionCurve(emotion.saturation);
+        shaper.curve = makeTubeCurve(emotion.saturation); // Use Analog Tube Curve
         const exciterHighPass = ctx.createBiquadFilter();
         exciterHighPass.type = 'highpass';
         exciterHighPass.frequency.value = 2000;
@@ -467,23 +485,28 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
         masterGain.connect(ctx.destination);
         const entryNode = compressor;
 
-        // Request High-Fidelity Audio Stream (LINEAR16 @ 24kHz)
-        const speechConfig: ExtendedSpeechConfig = {
+        // Use standard speech config
+        const speechConfig = {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: character.voiceName } },
-            audioEncoding: "LINEAR16",
-            sampleRateHertz: 24000
         };
+
+        // Prepare System Instruction for Voice Acting
+        const voiceActingPrompt = `Act as ${character.name}. Role: ${character.role}. Current Emotion: ${detectedEmotion}. Speak with ${character.systemInstruction.slice(0, 100)}...`;
 
         const result = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash-preview-tts',
             contents: { parts: [{ text: cleanText }] },
             config: {
                 responseModalities: [Modality.AUDIO],
-                speechConfig: speechConfig as any // Type cast to bypass SDK limitation if needed
+                speechConfig: speechConfig,
+                systemInstruction: {
+                    parts: [{ text: voiceActingPrompt }]
+                }
             }
         });
 
         for await (const chunk of result) {
+            if (!isMountedRef.current) break;
             const base64Audio = chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
             if (base64Audio) {
                 // Decode LINEAR16 PCM data
@@ -494,41 +517,34 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
                 source.buffer = audioBuffer;
                 
                 // Apply Prosody Adjustments (Base Pitch + Emotional Detune)
-                source.playbackRate.value = emotion.rate;
+                const finalRate = emotion.rate * speechSpeed;
+                source.playbackRate.value = finalRate;
                 source.detune.value = emotion.detune + basePitch;
 
                 source.connect(entryNode);
                 
+                // --- ROBUST SCHEDULING ---
                 if (nextStartTime < ctx.currentTime) nextStartTime = ctx.currentTime;
                 
                 source.start(nextStartTime);
+                activeSourcesCount++;
                 
-                nextStartTime += audioBuffer.duration / emotion.rate;
+                // Register cleanup event for THIS source
+                source.onended = () => {
+                    activeSourcesCount--;
+                    checkCleanup();
+                };
+                
+                // Adjust next start time based on the modified rate
+                nextStartTime += audioBuffer.duration / finalRate;
             }
         }
         
     } catch (e) {
         console.error("TTS Stream Error", e);
     } finally {
-        // Robust Time-Based Cleanup for Streaming Audio
-        // Instead of relying on 'onended' events which can be flaky with rapid source creation or garbage collection,
-        // we calculate the exact time the entire audio queue will finish playing.
-        const ctx = audioContextRef.current;
-        if (ctx && ctx.state !== 'closed' && nextStartTime > 0) {
-            const now = ctx.currentTime;
-            // Calculate time remaining in the scheduled queue
-            const timeRemaining = nextStartTime - now;
-            
-            // Wait for audio to finish + 1s buffer for reverb tail/echo
-            // Minimum 1s wait to ensure we don't cut off immediate sounds
-            const timeoutDuration = Math.max(1000, (timeRemaining * 1000) + 1000);
-            
-            ttsTimeoutRef.current = window.setTimeout(() => {
-                handleTTSCleanup();
-            }, timeoutDuration);
-        } else {
-            handleTTSCleanup();
-        }
+        streamFinished = true;
+        checkCleanup();
     }
   };
 
@@ -569,17 +585,18 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
     try {
       const responseId = (Date.now() + 1).toString();
       
-      const parts: any[] = [];
-      if (currentText) parts.push({ text: currentText });
+      // Fix structure to wrap parts in 'message' property
+      const messageParts: any[] = [];
+      if (currentText) messageParts.push({ text: currentText });
       if (currentImage) {
           const base64Data = currentImage.split(',')[1];
           const mimeType = currentImage.split(';')[0].split(':')[1];
-          parts.push({
+          messageParts.push({
               inlineData: { mimeType: mimeType, data: base64Data }
           });
       }
 
-      const result = await chatSessionRef.current.sendMessageStream({ message: parts });
+      const result = await chatSessionRef.current.sendMessageStream({ message: messageParts });
       
       let fullText = '';
       let hasStarted = false;
@@ -658,6 +675,20 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ character, onBack }) => {
         
         {/* Memory & FX Actions */}
         <div className="flex items-center gap-2">
+            {/* Speed Control Slider */}
+            <div className="hidden md:flex flex-col items-center bg-black/40 rounded px-2 py-0.5 border border-white/5">
+                <label className="text-[6px] font-mono text-gray-500 tracking-widest">SPD: {speechSpeed.toFixed(1)}x</label>
+                <input 
+                    type="range" 
+                    min="0.5" 
+                    max="2.0" 
+                    step="0.1" 
+                    value={speechSpeed} 
+                    onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
+                    className="w-12 h-1 accent-white bg-white/10 rounded-lg appearance-none cursor-pointer"
+                />
+            </div>
+            
             <button 
                 onClick={() => setIsFlashMode(!isFlashMode)} 
                 className={`w-7 h-7 flex items-center justify-center rounded border transition-all ${isFlashMode ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/50 shadow-[0_0_10px_rgba(250,204,21,0.2)]' : 'bg-transparent text-gray-500 border-white/10 hover:text-gray-300'}`}
