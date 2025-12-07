@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>AnimeTalk AI</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#020202" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Tailwind CDN (Keep for ease, though local is better for full offline) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Outfit"', 'sans-serif'],
+              mono: ['"Rajdhani"', 'monospace'],
+            },
+            colors: {
+              'anime-bg': '#050505',
+              'anime-card': 'rgba(20, 20, 30, 0.6)', 
+              'neon-pink': '#ff0055',
+              'neon-blue': '#00f3ff',
+              'neon-purple': '#bc13fe',
+              'neon-green': '#0aff00',
+              'neon-orange': '#ff9900',
+              'neon-red': '#ff2a2a',
+            },
+            boxShadow: {
+              'bloom-pink': '0 0 20px rgba(255, 0, 85, 0.4)',
+              'bloom-blue': '0 0 20px rgba(0, 243, 255, 0.4)',
+              'bloom-purple': '0 0 25px rgba(188, 19, 254, 0.4)',
+              'bloom-orange': '0 0 25px rgba(255, 153, 0, 0.4)',
+              'bloom-red': '0 0 25px rgba(255, 42, 42, 0.4)',
+            },
+            animation: {
+              'scanline': 'scanline 8s linear infinite',
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'breathing': 'breathing 4s ease-in-out infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'pulse-slow': 'pulse 3s infinite',
+            },
+            keyframes: {
+              scanline: {
+                '0%': { transform: 'translateY(-100%)' },
+                '100%': { transform: 'translateY(100%)' },
+              },
+              breathing: {
+                '0%, 100%': { transform: 'scale(1.1)', filter: 'brightness(1)' },
+                '50%': { transform: 'scale(1.15)', filter: 'brightness(1.15)' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #020202;
+        color: white;
+        overscroll-behavior: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      .scanlines {
+        background: linear-gradient(
+          to bottom,
+          rgba(255,255,255,0),
+          rgba(255,255,255,0) 50%,
+          rgba(0,0,0,0.1) 50%,
+          rgba(0,0,0,0.1)
+        );
+        background-size: 100% 3px;
+        position: absolute;
+        pointer-events: none;
+        top: 0; left: 0; right: 0; bottom: 0;
+        z-index: 999;
+        opacity: 0.12;
+      }
+      
+      .vignette {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.8) 100%);
+        pointer-events: none;
+        z-index: 998;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #333; 
+        border-radius: 2px;
+      }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

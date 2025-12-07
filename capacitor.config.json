@@ -1,0 +1,14 @@
+{
+  "appId": "com.animetalk.ai",
+  "appName": "AnimeTalk AI",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#020202"
+    }
+  }
+}

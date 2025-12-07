@@ -1,0 +1,7 @@
+{
+  "name": "PixelTalk - AI Voice Chat",
+  "description": "Um chat bot estilo retro pixel-art com chamadas de voz em tempo real usando Gemini Live API. Converse com personagens únicos em português.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
