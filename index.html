@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -10,8 +11,9 @@
     <meta name="theme-color" content="#020202" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AnimeTalk" />
 
-    <!-- Tailwind CDN (Keep for ease, though local is better for full offline) -->
+    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -120,15 +122,15 @@
         scrollbar-width: none;
       }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+    "vite": "https://aistudiocdn.com/vite@^7.2.6"
   }
 }
 </script>
@@ -136,5 +138,17 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Register PWA Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

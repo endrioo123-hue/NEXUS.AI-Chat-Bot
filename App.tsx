@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppScreen, Character } from './types';
 import CharacterCard from './components/CharacterCard';
@@ -10,14 +11,14 @@ import { getAllCharacters, deleteCharacter } from './services/characterService';
 
 // Overlay Component for CRT Effect
 const Overlay: React.FC = () => (
-    <div className="absolute inset-0 z-50 pointer-events-none rounded-[2.5rem] overflow-hidden">
+    <div className="absolute inset-0 z-50 pointer-events-none rounded-none sm:rounded-[2.5rem] overflow-hidden">
         <div className="scanlines"></div>
         <div className="vignette"></div>
-        {/* High-tech corners */}
-        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white/20 rounded-tl-lg"></div>
-        <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-white/20 rounded-tr-lg"></div>
-        <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-white/20 rounded-bl-lg"></div>
-        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white/20 rounded-br-lg"></div>
+        {/* High-tech corners - Visible only on Desktop/Framed mode */}
+        <div className="hidden sm:block absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white/20 rounded-tl-lg"></div>
+        <div className="hidden sm:block absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-white/20 rounded-tr-lg"></div>
+        <div className="hidden sm:block absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-white/20 rounded-bl-lg"></div>
+        <div className="hidden sm:block absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white/20 rounded-br-lg"></div>
     </div>
 );
 
@@ -251,8 +252,8 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-[#050505] flex items-center justify-center font-sans selection:bg-white/20 selection:text-white">
-      {/* Modern App Container */}
-      <div className="w-full h-full sm:max-w-[420px] sm:h-[880px] bg-[#020202] relative sm:rounded-[3rem] overflow-hidden shadow-2xl border-[4px] border-[#1a1a1a] ring-1 ring-black">
+      {/* Modern App Container - Responsive for Mobile (No Frame) vs Desktop (Framed) */}
+      <div className="w-full h-full sm:max-w-[420px] sm:h-[880px] bg-[#020202] relative sm:rounded-[3rem] overflow-hidden sm:shadow-2xl sm:border-[4px] sm:border-[#1a1a1a] sm:ring-1 sm:ring-black border-none shadow-none rounded-none">
          <Overlay />
          <div className="h-full relative text-white">
             {renderContent()}
