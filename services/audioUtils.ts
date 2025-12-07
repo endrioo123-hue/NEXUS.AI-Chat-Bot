@@ -39,7 +39,7 @@ export async function decodeAudioData(
   return buffer;
 }
 
-export function createPCM16Blob(data: Float32Array): Blob {
+export function createPCM16Blob(data: Float32Array, sampleRate: number = 16000): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -49,6 +49,6 @@ export function createPCM16Blob(data: Float32Array): Blob {
   }
   return {
     data: arrayBufferToBase64(int16.buffer),
-    mimeType: 'audio/pcm;rate=16000',
+    mimeType: `audio/pcm;rate=${sampleRate}`,
   };
 }

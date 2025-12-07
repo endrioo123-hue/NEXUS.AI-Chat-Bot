@@ -135,6 +135,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
   const hasSavedLog = useRef(false);
   const interruptTimeoutRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const avatarContainerRef = useRef<HTMLDivElement>(null); // Ref for direct DOM manipulation of aura
   const animationFrameRef = useRef<number | null>(null);
   const ambientLightRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<any>(null); // Keep track of session to close it properly
@@ -222,12 +223,55 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
       const dataArray = new Uint8Array(bufferLength);
       analyserRef.current.getByteFrequencyData(dataArray);
 
-      // --- Ambient Light Update ---
-      // Calculate Volume for Ambient Light
+      // --- Volume Calculation ---
       let sum = 0;
       for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
       const avgVolume = sum / bufferLength;
 
+      // --- Avatar Aura (Spiritual Pressure) Effect ---
+      if (avatarContainerRef.current) {
+          const energy = avgVolume / 255; // 0.0 to 1.0
+          
+          // Determine Aura Color based on Tailwind class
+          let rgbColor = '255, 255, 255'; // Default White
+          if (character.color.includes('orange')) rgbColor = '255, 100, 0'; // Vibrant Orange (Ichigo)
+          else if (character.color.includes('green')) rgbColor = '0, 255, 100'; // Green
+          else if (character.color.includes('blue')) rgbColor = '0, 200, 255'; // Cyan/Blue
+          else if (character.color.includes('red')) rgbColor = '255, 30, 30'; // Red
+          else if (character.color.includes('pink')) rgbColor = '255, 0, 128'; // Pink
+          else if (character.color.includes('purple')) rgbColor = '180, 0, 255'; // Purple
+          else if (character.color.includes('yellow')) rgbColor = '255, 220, 0'; // Yellow
+
+          if (energy > 0.05) {
+              const spread1 = 15 + (energy * 30);
+              const spread2 = 30 + (energy * 60);
+              const opacity = 0.4 + (energy * 0.6);
+              
+              // Apply multi-layered glow
+              avatarContainerRef.current.style.boxShadow = `
+                  0 0 ${spread1}px rgba(${rgbColor}, ${opacity}),
+                  0 0 ${spread2}px rgba(${rgbColor}, ${opacity * 0.5}),
+                  inset 0 0 20px rgba(${rgbColor}, ${opacity * 0.3})
+              `;
+              avatarContainerRef.current.style.borderColor = `rgba(${rgbColor}, ${opacity + 0.2})`;
+
+              // Subtle Shake for High Energy (Simulating Pressure)
+              let transform = `scale(${1 + energy * 0.1})`;
+              if (energy > 0.4) {
+                  const shakeX = (Math.random() - 0.5) * 4;
+                  const shakeY = (Math.random() - 0.5) * 4;
+                  transform += ` translate(${shakeX}px, ${shakeY}px)`;
+              }
+              avatarContainerRef.current.style.transform = transform;
+          } else {
+              // Idle state
+              avatarContainerRef.current.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+              avatarContainerRef.current.style.borderColor = 'rgba(255,255,255,0.2)';
+              avatarContainerRef.current.style.transform = 'scale(1)';
+          }
+      }
+
+      // --- Ambient Light Update ---
       if (ambientLightRef.current) {
           const scale = 1 + (avgVolume / 255) * 0.6; // Scale up to 1.6x
           const opacity = 0.1 + (avgVolume / 255) * 0.4; // Opacity up to 0.5
@@ -243,7 +287,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
       const bars = 80;
       const step = (Math.PI * 2) / bars;
 
-      // Color Parsing Hack for V2
+      // Color Parsing Hack for V2 Visualizer Lines
       let strokeColor = '#00f3ff';
       if (character.color.includes('pink')) strokeColor = '#ff0055';
       else if (character.color.includes('purple')) strokeColor = '#bc13fe';
@@ -251,6 +295,8 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
       else if (character.color.includes('red')) strokeColor = '#ff2a2a';
       else if (character.color.includes('gray')) strokeColor = '#a0a0a0';
       else if (character.color.includes('blue')) strokeColor = '#60a5fa';
+      else if (character.color.includes('green')) strokeColor = '#0aff00';
+      else if (character.color.includes('yellow')) strokeColor = '#ffcc00';
 
       ctx.lineWidth = 2;
       ctx.lineCap = 'butt';
@@ -287,7 +333,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
       }
 
       // Draw Microphone Input Indicator (Inner Glow/Ripple)
-      if (userVolumeRef.current > 0.002) {
+      if (userVolumeRef.current > 0.001) { // Visual threshold slightly higher than gate to avoid flickering on noise
           const inputScale = 1 + Math.min(userVolumeRef.current * 8, 0.4);
           ctx.beginPath();
           ctx.arc(centerX, centerY, radius * 0.75 * inputScale, 0, Math.PI * 2);
@@ -420,7 +466,12 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
         // Store input node
         processingInputRef.current = compressor;
 
+        // CRITICAL FIX: Ensure input context is created and resumed properly.
         inputAudioContextRef.current = new AudioContextClass({ sampleRate: 16000 });
+        if (inputAudioContextRef.current.state === 'suspended') {
+            await inputAudioContextRef.current.resume();
+        }
+
         streamRef.current = await navigator.mediaDevices.getUserMedia({ 
             audio: { 
                 echoCancellation: true, 
@@ -469,9 +520,13 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
                 const rms = Math.sqrt(sum / inputData.length);
                 userVolumeRef.current = rms; // Update for visualizer
 
-                // Noise Threshold - Lowered to 0.002 to catch quiet speech/whispers
-                if (rms > 0.002) {
-                    const pcmBlob = createPCM16Blob(inputData);
+                // Noise Threshold - Lowered drastically to ensure speech is caught even if quiet.
+                // Was 0.002, now 0.0005.
+                if (rms > 0.0005) {
+                    // Pass current sample rate to avoid pitch issues if browser ignores 16k request
+                    const currentSampleRate = inputAudioContextRef.current?.sampleRate || 16000;
+                    const pcmBlob = createPCM16Blob(inputData, currentSampleRate);
+                    
                     // Optimized sending: use active session ref if available to avoid Promise overhead
                     if (sessionRef.current) {
                         sessionRef.current.sendRealtimeInput({ media: pcmBlob });
@@ -594,8 +649,15 @@ const CallScreen: React.FC<CallScreenProps> = ({ character, onHangup }) => {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 text-red-500 font-black text-4xl tracking-tighter opacity-80 animate-ping">!</div>
             )}
 
-            <div className={`relative w-44 h-44 rounded-full p-1 z-10 transition-all duration-300 ${isInterrupted || status !== 'connected' ? 'grayscale opacity-50 scale-95' : 'scale-100'}`}>
-                <img src={character.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover border-4 border-black shadow-2xl bg-gray-900" />
+            <div 
+                ref={avatarContainerRef}
+                className={`
+                    relative w-44 h-44 rounded-full p-1 z-10 transition-all duration-75 ease-out
+                    ${isInterrupted || status !== 'connected' ? 'grayscale opacity-50 scale-95' : 'scale-100'}
+                `}
+                style={{ willChange: 'transform, box-shadow' }}
+            >
+                <img src={character.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover border-4 border-black bg-gray-900" />
                 <div className={`absolute inset-0 rounded-full border border-white/20`}></div>
             </div>
          </div>
